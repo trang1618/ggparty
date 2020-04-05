@@ -1,0 +1,136 @@
+---
+title: "Explore"
+output: html_document
+---
+
+
+```{r}
+library(tidyverse)
+# library(tree)
+# library(rpart)
+# library(rattle)
+# library(party)
+# library(ggparty)
+library(cowplot)
+# library(checkmate)
+# library(grid)
+# library(gtable)
+data(iris)
+```
+
+```{r}
+fit <- ctree(Species ~ ., data = iris)
+scaled_iris <- iris %>% 
+  dplyr::select(- Species) %>% 
+  scale() %>% 
+  as_tibble() %>% 
+  # rownames_to_column('Sample') %>% 
+  mutate(Species = iris$Species,
+         # Sample = as.numeric(Sample),
+         node_id = predict(fit, type = 'node'),
+         y_hat = predict(fit),
+         correct = (y_hat == Species),
+         y_hat =  str_to_title(y_hat)) %>% 
+  arrange(node_id) %>% 
+  mutate(Sample = row_number()) %>% 
+  pivot_longer(contains('.'), names_to = 'Feature')
+
+
+plot(fit)
+node_labels <- scaled_iris %>% 
+  distinct(Sample, .keep_all = T) %>% 
+  count(node_id, y_hat) %>% 
+  rename(id = node_id)
+n_nodes <- nrow(node_labels)
+n_samps <- nrow(iris)
+```
+
+```{r}
+gg_iris <- scaled_iris %>% rename(id = node_id)
+fit <- ctree(Species ~ ., data = iris)
+fit$node_labels <- node_labels
+max_prop <- max(node_labels$n)/n_samps
+```
+
+```{r}
+ggparty(fit, terminal_space = 0.3) +
+  geom_edge(size = 0.5, color = 'grey70') +
+  geom_edge_label(colour = 'grey30', size = 3) +
+  geom_node_plot(
+    gglist = list(
+      geom_tile(data = gg_iris,
+                aes(y = Feature, x = Sample, fill = value)),
+      geom_segment(data = gg_iris %>% filter(correct == FALSE),
+                   aes(y= .5, yend= .5, x=Sample-.5, xend=Sample+.5),
+                   size = 2, color = 'red'),
+      geom_segment(data = gg_iris %>% filter(correct == TRUE),
+                   aes(y= .5, yend= .5, x=Sample-.5, xend=Sample+.5),
+                   size = 2, color = 'white'),
+      scale_fill_viridis_c(),
+      scale_x_continuous(expand = c(0,0)),
+      scale_y_discrete(expand = c(0,0)),
+      labs(x = NULL, y = NULL),
+      theme_bw(base_size = 10),
+      theme(axis.text = element_blank(),
+            axis.ticks = element_blank(),
+            legend.position = 'None',
+            plot.margin = margin(t = 10, 0, 0, 0, unit = "pt"))
+    ),
+    scales = "free",
+    id = "terminal",
+    shared_axis_labels = T,
+    shared_legend = F,
+    legend_separator = T,
+    size = 0.8
+    # width = node_labels$n/n_samps/max_prop
+    # size = node_labels$n/n_samps/max_prop
+    # predict = "beauty",
+    # predict_gpar = list(col = "blue",
+    #                     size = 1.2)
+  ) +
+  geom_node_label(label.size = 0,
+    # aes(col = splitvar),
+                  label.padding = unit(0.15, "lines"),
+                  line_list = list(
+                    aes(label = splitvar),
+                    aes(label = paste("p =", formatC(p.value, format = "e", digits = 2)))),
+                  line_gpar = list(
+                    list(size = 9),
+                    list(size = 0)),
+                  ids = "inner") +
+  geom_node_label(
+    aes(label = y_hat),
+    label.padding = unit(0.25, "lines"),
+    # fontface = "bold",
+    # label = paste0("Node ", id, ", N = ", nodesize)),
+    ids = "terminal",
+    size = 3.5, 
+    nudge_y = 0) +
+  theme(legend.position = "none")
+# k <- get_plot_data(fit)
+```
+
+
+```{r}
+plot_tree <- ggparty(fit, terminal_space = 0.7) +
+  geom_edge(size = 1) +
+  geom_edge_label(colour = "grey", size = 5) +
+  geom_node_label(aes(col = splitvar),
+                  line_list = list(
+                    aes(label = splitvar),
+                    aes(label = paste("p =", formatC(p.value, format = "e", digits = 2)))),
+                  line_gpar = list(
+                    list(size = 10),
+                    list(size = 0)),
+                  ids = "inner") +
+  geom_node_label(aes(
+    # label = paste0("Node ", id, ", N = ", nodesize)),
+    label = paste0("N = ", nodesize)),
+    fontface = "bold",
+    ids = "terminal",
+    size = 5, 
+    nudge_y = 0.01) +
+  theme(legend.position = "none")
+
+```
+
