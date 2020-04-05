@@ -2,6 +2,9 @@
 get_plot_data <- function(party_object, horizontal = FALSE, terminal_space = 0.2,
                           add_vars = NULL) {
   #browser()
+  # party_object = fit
+  # terminal_space = 0.7
+  # horizontal = FALSE
   ids <- nodeids(party_object)
   plot_data <- data.frame(id = ids,
                           x = NA,
@@ -23,9 +26,11 @@ get_plot_data <- function(party_object, horizontal = FALSE, terminal_space = 0.2
   plot_data <- add_splitvar_breaks_index(party_object, plot_data)
   plot_data <- add_info(party_object, plot_data)
   plot_data <- add_levels(plot_data, endnode_level = depth(party_object))
-  plot_data <- add_layout(plot_data, horizontal, terminal_space)
-  plot_data <- add_data(party_object, plot_data)
-  plot_data <- add_vars(party_object, plot_data, add_vars)
+  # plot_data <- add_layout(plot_data, horizontal, terminal_space)
+  plot_data <- add_layout(plot_data, horizontal = plot_data$horizontal[1], terminal_space,
+                          node_size = party_object$node_labels$n)
+  plot_data <- add_data(party_object, plot_data, node_labels = party_object$node_labels)
+  # plot_data <- add_vars(party_object, plot_data, add_vars)
   plot_data$horizontal <- horizontal
   return(plot_data)
 }
@@ -196,7 +201,7 @@ add_levels <- function(plot_data, endnode_level) {
 # adds coordinates for nodes, their parents and the joining edges' labels
 
 
-add_layout <- function(plot_data, horizontal, terminal_space) {
+add_layout <- function(plot_data, horizontal, terminal_space, node_size) {
   terminal_level <- max(plot_data$level)
 
   # assign coordinates to endnodes
@@ -205,7 +210,9 @@ add_layout <- function(plot_data, horizontal, terminal_space) {
     i_id <- terminal_data$id[i]
     plot_data[i_id, "y"] <- terminal_space
     # divide x axis up between all terminal nodes
-    plot_data[i_id, "x"] <- (i * 2 - 1)  / (nrow(terminal_data) * 2)
+    # plot_data[i_id, "x"] <- (i * 2 - 1)  / (nrow(terminal_data) * 2)
+    raw_pos <- (sum(node_size[0:i]) - node_size[i]/2)/sum(node_size)
+    plot_data[i_id, "x"] <- raw_pos
   }
 
   # assign coordinates to remaining nodes
@@ -246,7 +253,7 @@ add_layout <- function(plot_data, horizontal, terminal_space) {
 
 # add_data() --------------------------------------------------------------
 
-add_data <- function(party_object, plot_data) {
+add_data <- function(party_object, plot_data, node_labels) {
 
   #check for surv objects
   data <- expand_surv(party_object[[1]]$data)
@@ -302,6 +309,7 @@ add_data <- function(party_object, plot_data) {
       plot_data[i, data_column][[1]] <- list(node_data[[column]])
     }
   }
+  plot_data <- merge(plot_data, node_labels, by = 'id', all.x = TRUE)
   return(plot_data)
 }
 
@@ -328,7 +336,7 @@ expand_surv <- function(data) {
 
 
 add_vars <- function(party_object, data, add_vars) {
-
+  # data = plot_data
   for (i in seq_along(add_vars)) {
     for (j in seq_len(nrow(data))) {
     if (is.character(add_vars[[i]])) {
