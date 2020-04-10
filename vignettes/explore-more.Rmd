@@ -1,0 +1,241 @@
+---
+title: "Explore other datasets"
+output: html_document
+---
+
+
+```{r}
+library(tidyverse)
+library(ggparty)
+library(gtable)
+# devtools::install_github("makeyourownmaker/pmlblite")
+library(pmlblite) # fetch PMLB datasets
+```
+
+```{r}
+clust <- function(df, feat_vec){
+  new_samp_order <- df %>%
+    select(all_of(feat_vec)) %>% 
+    dist() %>%
+    hclust() %>%
+    `[[`('order')
+
+  df[new_samp_order, ]
+}
+```
+
+What datasets are included in PMLB for classification?
+```{r}
+
+p_thres <- 0.05
+draw_class <- 'bottom'
+my_layout <- NULL
+write_node <- F # whether node numbers are displayed
+facet_space <- 0.001 # spacing between facets (out of 1)
+heat_rel_height <- 0.2 # relative height for heatmap
+clust_class <- TRUE # whether class should be included in hierarchical clustering
+fig_ext <- '.png'
+```
+
+```{r}
+# dat_raw <- iris
+# dataset_name <- 'iris'
+# class_lab <- 'Species'
+# my_layout <- data.frame(id = c(1, 3),
+#                         x = c(0.3, 0.7),
+#                         y = c(1, 0.8))
+
+
+# PMLB datasets
+
+
+# dataset_name <- 'mushroom'
+# label_map <- c(`0` = 'E', `1` = 'P') # edible or poisonous
+
+# dataset_name <- 'breast-cancer-wisconsin'
+# label_map <- c(`1` = 'Malignant', `0` = 'Benign')
+
+# dataset_name <- 'yeast'
+
+# dataset_name <- 'breast-cancer'
+#
+# dataset_name <- 'wine-quality-red'
+# my_layout <- data.frame(id = c(2, 29),
+#                         x = c(0.1, 0.9),
+#                         y = c(0.9, 0.9))
+
+# dataset_name <- 'titanic'
+# label_map <- c(`-1` = 'Deceased', `1` = 'Survived') 
+
+# dataset_name <- 'diabetes'
+# label_map <- c(`1` = 'Negative', `2` = 'Positive') # test results
+
+
+# dataset_name <- 'tic-tac-toe'
+# label_map <- c(`1` = 'Win', `0` = 'Loss/Draw')
+
+
+dataset_name <- 'wine-recognition'
+# label_map <- c(`1` = 'Win', `0` = 'Loss/Draw')
+# feat_names <- c('Alcohol', 'Malic acid', 'Ash', 'Alcalinity of ash', 'Magnesium', 'Total phenols', 'Flavanoids', 'Nonflavanoid phenols', 'Proanthocyanins', 'Color intensity', 'Hue', 'OD280/OD315 of diluted wines', 'Prolin')
+
+
+class_lab <- 'target'
+dat_raw <- fetch_data(dataset_name)
+
+
+# colnames(dat_raw)[2:14] <- feat_names
+classification_dataset_names
+
+```
+
+
+```{r}
+
+
+dat <- dat_raw %>% 
+  rename(my_class = class_lab) %>% 
+  mutate(my_class = as.factor(my_class))
+
+dat$my_class <- tryCatch(recode(dat$my_class, !!!label_map), 
+                      error = function(e) dat$my_class)
+
+num_class <- dat %>% 
+  pull(my_class) %>% 
+  unique() %>% 
+  length()
+
+feat_names <- setdiff(colnames(dat), 'my_class')
+class_col <- scales::viridis_pal(option = 'B', begin = 0.3, end = 0.85)(num_class)
+
+fit <- ctree(my_class ~ ., data = dat)
+
+# scales::show_col(scales::viridis_pal(option = 'B', begin = 0.2, end = 0.85)(3)) 
+# class_col <- wesanderson::wes_palette("Moonrise2")[1:3]
+# scales::show_col(wesanderson::wes_palette("Moonrise2"))
+
+scaled_dat <- dat %>% 
+  dplyr::select(- my_class) %>% 
+  scale() %>% 
+  as_tibble() %>% 
+  mutate(my_class = dat$my_class,
+         node_id = predict(fit, type = 'node'),
+         y_hat = predict(fit, type = 'response'),
+         # y_hat = ifelse(is.numeric(y_pred), y_pred > 0.5, y_pred),
+         correct = (y_hat == my_class)) %>% 
+  group_by(node_id) %>%
+  nest() %>% 
+  mutate(new_data = map(.x = data, clust, feat_vec = c(feat_names, 
+                                                       ifelse(clust_class == TRUE, 'my_class', NULL)))) %>% 
+  select(- data) %>% 
+  unnest(cols = new_data) %>% 
+  ungroup() %>% 
+  mutate(Sample = row_number()) 
+
+node_labels <- scaled_dat %>% 
+  distinct(Sample, .keep_all = T) %>% 
+  count(node_id, y_hat) %>% 
+  rename(id = node_id)
+n_nodes <- nrow(node_labels)
+```
+
+```{r}
+fit$node_labels <- node_labels
+fit$white_space <- facet_space
+
+my_nodes <- nodeapply(
+  fit, ids = nodeids(fit), 
+  FUN = function(n) {
+    node_pvals <- info_node(n)$p.value
+    names(node_pvals[node_pvals < p_thres])
+  }) %>% 
+  unlist() %>% 
+  unique()
+
+gg_dat <- scaled_dat %>% 
+  pivot_longer(all_of(feat_names), names_to = 'Feature')
+```
+
+```{r}
+dtree <- ggparty(fit, terminal_space = 0, layout = my_layout) +
+  geom_edge(size = 0.5, color = 'grey70') +
+  geom_edge_label(colour = 'grey30', size = 3) +
+  geom_node_label(label.size = 0,
+                  label.padding = unit(0.15, "lines"),
+                  line_list = list(
+                    aes(label = paste("Node", id)),
+                    aes(label = splitvar),
+                    aes(label = paste("p =", formatC(p.value, format = "e", digits = 2)))),
+                  line_gpar = list(
+                    list(size = ifelse(write_node == TRUE, 8, 0)),
+                    list(size = 9),
+                    list(size = 0)),
+                  ids = "inner") +
+  geom_node_label(
+    aes(label = y_hat, fill = y_hat),
+    col = 'white',
+    label.padding = unit(0.25, "lines"),
+    ids = "terminal",
+    size = 3.5, 
+    nudge_y = 0) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_fill_manual(values = class_col) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 1.05)) + 
+  # theme_bw()+
+  guides(fill = FALSE)
+# dtree
+```
+
+
+```{r}
+dheat <- ggplot(gg_dat) +
+  facet_grid(cols = vars(node_id), scales = 'free_x', space = 'free') +
+  geom_tile(data = gg_dat %>% filter(Feature %in% my_nodes),
+            aes(y = Feature, x = Sample, fill = value)) +
+  scale_fill_viridis_c() +
+  ggnewscale::new_scale_fill() +
+  geom_tile(
+    data = scaled_dat,
+    aes(
+      y = ifelse(draw_class == 'top', length(my_nodes) + 1, 0), 
+      x = Sample, fill = my_class)) +
+  scale_fill_manual(values = class_col) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_discrete(expand = c(0,0)
+  ) +
+  labs(x = NULL, y = NULL) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks = element_blank(),
+    legend.position = 'None',
+    strip.background = element_blank(),
+    strip.text.x = element_blank(),
+    panel.spacing = unit(facet_space, 'npc')
+  )
+```
+
+
+```{r}
+g <- ggplot2::ggplotGrob(dheat)
+panel_id <- g$layout[grep('panel', g$layout$name),]
+# tree_grob <- ggplotGrob(dtree)
+heat_height <- g$heights[panel_id[1, 't']]
+# gtable_show_layout(g)
+
+new_g <- g %>% 
+  gtable::gtable_add_rows(heat_height*(1/heat_rel_height - 1), 0) %>% 
+  gtable::gtable_add_grob(
+    ggplotGrob(dtree),
+    t = 1, l = min(panel_id$l), r = max(panel_id$l))
+
+grid::grid.newpage()
+grid::grid.draw(new_g)
+```
+
+
+```{r}
+ggsave(filename = paste0('figs/', dataset_name, fig_ext), 
+       grid::grid.draw(new_g),
+       height = 7)
+```
+
