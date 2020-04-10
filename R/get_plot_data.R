@@ -28,7 +28,8 @@ get_plot_data <- function(party_object, horizontal = FALSE, terminal_space = 0.2
   plot_data <- add_levels(plot_data, endnode_level = depth(party_object))
   # plot_data <- add_layout(plot_data, horizontal, terminal_space)
   plot_data <- add_layout(plot_data, horizontal = plot_data$horizontal[1], terminal_space,
-                          node_size = party_object$node_labels$n)
+                          node_size = party_object$node_labels$n,
+                          white_space = party_object$white_space)
   plot_data <- add_data(party_object, plot_data, node_labels = party_object$node_labels)
   # plot_data <- add_vars(party_object, plot_data, add_vars)
   plot_data$horizontal <- horizontal
@@ -201,7 +202,7 @@ add_levels <- function(plot_data, endnode_level) {
 # adds coordinates for nodes, their parents and the joining edges' labels
 
 
-add_layout <- function(plot_data, horizontal, terminal_space, node_size) {
+add_layout <- function(plot_data, horizontal, terminal_space, node_size, white_space) {
   terminal_level <- max(plot_data$level)
 
   # assign coordinates to endnodes
@@ -212,7 +213,8 @@ add_layout <- function(plot_data, horizontal, terminal_space, node_size) {
     # divide x axis up between all terminal nodes
     # plot_data[i_id, "x"] <- (i * 2 - 1)  / (nrow(terminal_data) * 2)
     raw_pos <- (sum(node_size[0:i]) - node_size[i]/2)/sum(node_size)
-    plot_data[i_id, "x"] <- raw_pos
+    white_space_adj <- raw_pos*(1-(nrow(terminal_data) - 1)*white_space) + (i-1)*white_space
+    plot_data[i_id, "x"] <- white_space_adj
   }
 
   # assign coordinates to remaining nodes
