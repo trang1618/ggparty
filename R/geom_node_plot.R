@@ -248,16 +248,13 @@ GeomNodeplot <- ggproto(
     if (length(height) == 1) height <- rep(height, length(ids))
     else assert_subset(length(height), choices = c(1, length(ids)))
 
-
+    if (size[1] == "nodesize") size <-
+      scales::rescale(nodesize, to = c(0, 1), from = c(0, max(nodesize)))
+    if (size[1] == "log(nodesize)")
+      size <- scales::rescale(log(nodesize), to = c(0,1),
+                              from = c(0, max(log(nodesize))))
     if (length(size) == 1) size <- rep(size, length(ids))
-    else {
-      assert_subset(length(size), choices = c(1, length(ids)))
-      if (size[1] == "nodesize") size <-
-          scales::rescale(nodesize, to = c(0, 1), from = c(0, max(nodesize)))
-      if (size[1] == "log(nodesize)")
-        size <- scales::rescale(log(nodesize), to = c(0,1),
-                                from = c(0, max(log(nodesize))))
-    }
+    else assert_subset(length(size), choices = c(1, length(ids)))
 
 
     # calculate newdata and resulting predictions -----------------------------
