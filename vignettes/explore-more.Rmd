@@ -13,6 +13,8 @@ library(pmlblite) # fetch PMLB datasets
 ```
 
 ```{r}
+# rm(list = ls())
+
 clust <- function(df, feat_vec){
   new_samp_order <- df %>%
     select(all_of(feat_vec)) %>% 
@@ -31,19 +33,23 @@ p_thres <- 0.05
 draw_class <- 'bottom'
 my_layout <- NULL
 write_node <- F # whether node numbers are displayed
-facet_space <- 0.001 # spacing between facets (out of 1)
+white_space <- 0.001 # spacing between facets (out of 1)
 heat_rel_height <- 0.2 # relative height for heatmap
 clust_class <- TRUE # whether class should be included in hierarchical clustering
 fig_ext <- '.png'
+terminal_space <- 0
+horizontal = TRUE
+custom_layout = NULL
+
 ```
 
 ```{r}
 # dat_raw <- iris
 # dataset_name <- 'iris'
 # class_lab <- 'Species'
-# my_layout <- data.frame(id = c(1, 3),
-#                         x = c(0.3, 0.7),
-#                         y = c(1, 0.8))
+# custom_layout <- data.frame(id = c(1, 3),
+#                             x = c(0.3, 0.7),
+#                             y = c(1, 0.8))
 
 
 # PMLB datasets
@@ -52,8 +58,8 @@ fig_ext <- '.png'
 # dataset_name <- 'mushroom'
 # label_map <- c(`0` = 'E', `1` = 'P') # edible or poisonous
 
-# dataset_name <- 'breast-cancer-wisconsin'
-# label_map <- c(`1` = 'Malignant', `0` = 'Benign')
+dataset_name <- 'breast-cancer-wisconsin'
+label_map <- c(`1` = 'Malignant', `0` = 'Benign')
 
 # dataset_name <- 'yeast'
 
@@ -75,11 +81,16 @@ fig_ext <- '.png'
 # label_map <- c(`1` = 'Win', `0` = 'Loss/Draw')
 
 
-dataset_name <- 'wine-recognition'
+# dataset_name <- 'wine-recognition'
 # label_map <- c(`1` = 'Win', `0` = 'Loss/Draw')
 # feat_names <- c('Alcohol', 'Malic acid', 'Ash', 'Alcalinity of ash', 'Magnesium', 'Total phenols', 'Flavanoids', 'Nonflavanoid phenols', 'Proanthocyanins', 'Color intensity', 'Hue', 'OD280/OD315 of diluted wines', 'Prolin')
 
+# dataset_name <- 'tokyo1'
 
+# dataset_name <- 'vehicle'
+# dataset_name <- 'tae'
+# 
+# 
 class_lab <- 'target'
 dat_raw <- fetch_data(dataset_name)
 
@@ -91,8 +102,6 @@ classification_dataset_names
 
 
 ```{r}
-
-
 dat <- dat_raw %>% 
   rename(my_class = class_lab) %>% 
   mutate(my_class = as.factor(my_class))
@@ -101,7 +110,7 @@ dat$my_class <- tryCatch(recode(dat$my_class, !!!label_map),
                       error = function(e) dat$my_class)
 
 num_class <- dat %>% 
-  pull(my_class) %>% 
+  pull(my_class) %>%  
   unique() %>% 
   length()
 
@@ -135,13 +144,18 @@ scaled_dat <- dat %>%
 node_labels <- scaled_dat %>% 
   distinct(Sample, .keep_all = T) %>% 
   count(node_id, y_hat) %>% 
-  rename(id = node_id)
+  rename(id = node_id) %>% 
+  mutate(node_map = paste(id, '=', y_hat))
+
+
+id
+
 n_nodes <- nrow(node_labels)
 ```
 
 ```{r}
 fit$node_labels <- node_labels
-fit$white_space <- facet_space
+fit$white_space <- white_space
 
 my_nodes <- nodeapply(
   fit, ids = nodeids(fit), 
@@ -155,6 +169,45 @@ my_nodes <- nodeapply(
 gg_dat <- scaled_dat %>% 
   pivot_longer(all_of(feat_names), names_to = 'Feature')
 ```
+
+
+```{r}
+node_size = node_labels$n
+plot_data <- ggparty:::get_plot_data(
+  fit, 
+  horizontal = horizontal,
+  terminal_space = terminal_space,
+  add_vars = NULL)
+
+terminal_data <- plot_data %>% filter(kids == 0)
+n_terminals <- nrow(terminal_data)
+new_x <- vector(mode = 'numeric', length = n_terminals)
+
+for (i in seq_len(n_terminals)) {
+    i_id <- terminal_data$id[i]
+    # print(i_id)
+    # plot_data[i_id, "y"] <- terminal_space
+    # divide x axis up between all terminal nodes
+    # plot_data[i_id, "x"] <- (i * 2 - 1)  / (nrow(terminal_data) * 2)
+    raw_pos <- (sum(node_size[0:i]) - node_size[i]/2)/sum(node_size)
+    white_space_adj <- raw_pos*(1-(nrow(terminal_data) - 1)*white_space) + (i-1)*white_space
+    new_x[i] <- white_space_adj
+}
+# term_layout <- tibble(id = terminal_data$id,
+#                       x = new_x,
+#                       y = 0)
+
+my_layout <- tibble(id = terminal_data$id,  x = new_x, y = 0) %>% 
+  bind_rows(custom_layout)
+
+term_dat <- plot_data %>% 
+  left_join(node_labels, by = 'id') %>% 
+  select(- c(x, y)) %>% 
+  left_join(my_layout, by = 'id') %>% 
+  filter(kids == 0)
+```
+
+
 
 ```{r}
 dtree <- ggparty(fit, terminal_space = 0, layout = my_layout) +
@@ -172,7 +225,8 @@ dtree <- ggparty(fit, terminal_space = 0, layout = my_layout) +
                     list(size = 0)),
                   ids = "inner") +
   geom_node_label(
-    aes(label = y_hat, fill = y_hat),
+    data = term_dat,
+    mapping = aes(label = y_hat, fill = y_hat),
     col = 'white',
     label.padding = unit(0.25, "lines"),
     ids = "terminal",
@@ -181,10 +235,10 @@ dtree <- ggparty(fit, terminal_space = 0, layout = my_layout) +
   scale_x_continuous(expand = c(0,0)) +
   scale_fill_manual(values = class_col) +
   coord_cartesian(xlim = c(0, 1), ylim = c(0, 1.05)) + 
-  # theme_bw()+
   guides(fill = FALSE)
-# dtree
 ```
+
+
 
 
 ```{r}
@@ -210,7 +264,7 @@ dheat <- ggplot(gg_dat) +
     legend.position = 'None',
     strip.background = element_blank(),
     strip.text.x = element_blank(),
-    panel.spacing = unit(facet_space, 'npc')
+    panel.spacing = unit(white_space, 'npc')
   )
 ```
 
