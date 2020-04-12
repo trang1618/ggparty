@@ -2,9 +2,6 @@
 get_plot_data <- function(party_object, horizontal = FALSE, terminal_space = 0.2,
                           add_vars = NULL) {
   #browser()
-  # party_object = fit
-  # terminal_space = 0.7
-  # horizontal = FALSE
   ids <- nodeids(party_object)
   plot_data <- data.frame(id = ids,
                           x = NA,
@@ -331,6 +328,7 @@ expand_surv <- function(data) {
 
 
 add_vars <- function(party_object, data, add_vars) {
+
   for (i in seq_along(add_vars)) {
     for (j in seq_len(nrow(data))) {
     if (is.character(add_vars[[i]])) {
