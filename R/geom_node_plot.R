@@ -98,8 +98,8 @@ geom_node_plot <- function(plot_call = "ggplot",
 
   #input_checks
   assert_list(gglist)
-  # assert_numeric(width, lower = 0, finite = TRUE, any.missing = FALSE, max.len = 1)
-  # assert_numeric(height, lower = 0, finite = TRUE, any.missing = FALSE, max.len = 1)
+  assert_numeric(width, lower = 0, finite = TRUE, any.missing = FALSE, max.len = 1)
+  assert_numeric(height, lower = 0, finite = TRUE, any.missing = FALSE, max.len = 1)
   assert_subset(scales, c("fixed", "free", "free_x", "free_y"))
   assert_numeric(nudge_x, lower = -1, upper = 1, finite = TRUE, any.missing = FALSE,
                  max.len = 1)
@@ -188,11 +188,10 @@ GeomNodeplot <- ggproto(
 
 
     # calculate node node sizes ------------------------------------------------
-    # data = k
+
     # for vertical trees
     if (vertical) {
-      # node_width <- mean(abs(diff(data$x[data$kids == 0])))
-      node_width <- data$nodesize[data$kids == 0]/sum(data$nodesize[data$kids == 0])
+      node_width <- mean(abs(diff(data$x[data$kids == 0])))
       node_height <- mean(abs(diff(data$y[data$kids != 0])))
       xlab_x <- legend_x
       ylab_y <- (min(data$y) + y_0) * 0.5
@@ -417,8 +416,7 @@ GeomNodeplot <- ggproto(
         nodeplotGrob(
           x = x,
           y = y,
-          width = node_width[i] * width[i] * size[i],
-          # width = node_width * width[i] * size[i],
+          width = node_width * width[i] * size[i],
           height = ifelse(data$kids[data$id == ids[i]] == 0,
                           abs(y - nudge_y - y_0),
                           node_height) * height[i] * size[i],
@@ -433,8 +431,7 @@ GeomNodeplot <- ggproto(
           y = y,
           width = ifelse(data$kids[data$id == ids[i]] == 0,
                          abs(x - nudge_x - x_1),
-                         node_width[i]) * width[i] * size[i],
-                         # node_width) * width[i] * size[i],
+                         node_width) * width[i] * size[i],
           height = node_height * height[i] * size[i],
           just = ifelse(data$kids[data$id == ids[i]] == 0,
                         "left",
@@ -443,9 +440,7 @@ GeomNodeplot <- ggproto(
         )
       }
     })
-    # print(nodeplot_gtable)
-    # print(node_width)
-    # combine nodeplots and legend
+    #combine nodeplots and legend
     grob_list <- c(nodeplot_gtable, grob_list)
     class(grob_list) <- "gList"
     ggname("geom_node_plots", grid::grobTree(children = grob_list))
